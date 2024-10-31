@@ -2,34 +2,29 @@ import cv2
 from image import Image
 from detector import ArucoDetector
 from data import Data
+import pandas as pd
 
 # Inicjalizacja
 EXPECTED_MARKERS = 4
-# img_loader = Image('img/aruco2/')
 img_loader = Image('img/aruco_errors/')
 detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
 data = Data(expected_markers=EXPECTED_MARKERS)
 
-# Test na jednym obrazie
-frame, index = img_loader.get_frame_by_index(1)
-corners, ids = detector.detect(frame, auto=True)
+# Test on a single image
+frame, index = img_loader.get_frame_by_index(0)
+success = detector.detect(frame, data, index)
 
-if corners is not None and ids is not None:
-    # Przygotowanie danych do zapisu
-    markers_data = []
-    for i, corner in enumerate(corners):
-        x = corner[0][:, 0].mean()
-        y = corner[0][:, 1].mean()
-        markers_data.append((ids[i][0], x, y))
+if success:
+    # Visualization based on DataFrame data
+    img_markers = img_loader.draw_markers(frame, data, index)
 
-    # Dodanie danych do DataFrama
-    data.add_detection(index, markers_data)
+    # Display DataFrame
+    # print("\nCollected data:")
+    # pd.set_option('display.max_columns', None)
+    # pd.set_option('display.width', None)
+    # print(data.df)
 
-    # Wizualizacja
-    img_markers = frame.copy()
-    cv2.aruco.drawDetectedMarkers(img_markers, corners, ids)
+    # Display image
     cv2.imshow(f'Frame {index} with markers', img_markers)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-
-print(data.df)
