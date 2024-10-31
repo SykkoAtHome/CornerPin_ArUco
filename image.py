@@ -66,6 +66,44 @@ class Image:
                     text_config.font_scale, text_config.text_color,
                     text_config.thickness)
 
+    def draw_rectangle_center(self, img, center_x, center_y):
+        """
+        Draw the center point of the rectangle formed by markers
+
+        Args:
+            img: Image to draw on
+            center_x: X coordinate of the rectangle center
+            center_y: Y coordinate of the rectangle center
+        """
+        # Convert coordinates to integers for drawing
+        center_point = (int(center_x), int(center_y))
+
+        # Draw main center point
+        cv2.circle(img, center_point,
+                   self.config.rect_center_point_size * 2,  # Larger than marker centers
+                   self.config.rect_center_color, -1)
+
+        # Draw crosshair
+        line_length = self.config.rect_center_line_length
+        # Horizontal line
+        cv2.line(img,
+                 (center_point[0] - line_length, center_point[1]),
+                 (center_point[0] + line_length, center_point[1]),
+                 self.config.rect_center_color,
+                 self.config.rect_center_line_thickness)
+        # Vertical line
+        cv2.line(img,
+                 (center_point[0], center_point[1] - line_length),
+                 (center_point[0], center_point[1] + line_length),
+                 self.config.rect_center_color,
+                 self.config.rect_center_line_thickness)
+
+        # Draw coordinates text
+        text = f"Center: ({center_x:.1f}, {center_y:.1f})"
+        text_pos = (center_point[0] + self.config.rect_center_text.offset_x,
+                    center_point[1] + self.config.rect_center_text.offset_y)
+        self._draw_text_with_background(img, text, text_pos, self.config.rect_center_text)
+
     def draw_markers(self, frame, data, frame_index):
         """
         Draws markers on the frame based on DataFrame data.
@@ -123,5 +161,16 @@ class Image:
                                  center[1] + self.config.angle.offset_y)
                     self._draw_text_with_background(img_markers, f'{angle:.1f}°',
                                                     angle_pos, self.config.angle)
+
+        # Get center data from DataFrame
+        frame_data = data.df[data.df['frame_index'] == frame_index]
+        if not frame_data.empty:
+            row = frame_data.iloc[0]
+            center_x = row['center_x']
+            center_y = row['center_y']
+
+            # Draw center only if both coordinates are available
+            if not (np.isnan(center_x) or np.isnan(center_y)):
+                self.draw_rectangle_center(img_markers, center_x, center_y)
 
         return img_markers

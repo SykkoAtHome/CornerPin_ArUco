@@ -10,11 +10,10 @@ name = "testy"
 EXPECTED_MARKERS = 4
 img_loader = Image('img/fix_alignment/')
 detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
-# data = Data(expected_markers=EXPECTED_MARKERS, file_path=f"{name}/{name}_detections.csv")
 data = Data(expected_markers=EXPECTED_MARKERS)
 
 # Test on a single image
-frame, index = img_loader.get_frame_by_index(3)
+frame, index = img_loader.get_frame_by_index(5)
 success = detector.detect(frame, data, index)
 
 if success:

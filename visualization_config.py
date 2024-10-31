@@ -47,6 +47,18 @@ class VisualizationConfig:
             offset_y=15
         )
 
+        # Configuration for rectangle center text
+        self.rect_center_text = TextConfig(
+            font_scale=0.6,
+            text_color=(255, 180, 0),  # Orange
+            bg_color=(0, 0, 0),
+            bg_alpha=0.4,
+            padding=5,
+            offset_x=20,
+            offset_y=20,
+            thickness=2
+        )
+
         # Corner point colors (Red, Green, Blue, Yellow)
         self.corner_colors = [
             (0, 0, 255),
@@ -62,3 +74,9 @@ class VisualizationConfig:
         self.center_point_size = 4
         self.orientation_arrow_color = (255, 0, 0)  # Blue
         self.orientation_arrow_thickness = 1
+
+        # Rectangle center visualization settings
+        self.rect_center_color = (255, 180, 0)  # Orange
+        self.rect_center_point_size = 6
+        self.rect_center_line_length = 20
+        self.rect_center_line_thickness = 2

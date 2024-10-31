@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 
-
 class Data:
     def __init__(self, expected_markers):
         self.expected_markers = expected_markers
@@ -10,7 +9,9 @@ class Data:
         columns = [
             'frame_index',
             'image_width',
-            'image_height'
+            'image_height',
+            'center_x',     # Keeping the center columns
+            'center_y'      # but they will be filled later
         ]
 
         # Columns for each marker
@@ -54,7 +55,9 @@ class Data:
         row_data = {
             'frame_index': frame_index,
             'image_width': image_width if image_width is not None else np.nan,
-            'image_height': image_height if image_height is not None else np.nan
+            'image_height': image_height if image_height is not None else np.nan,
+            'center_x': np.nan,  # Initialize center coordinates as NaN
+            'center_y': np.nan   # They will be calculated later
         }
 
         # Initialize all values as NaN
