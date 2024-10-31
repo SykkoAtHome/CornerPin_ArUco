@@ -3,10 +3,11 @@ from image import Image
 from detector import ArucoDetector
 from data import Data
 import pandas as pd
+import os
 
 # Inicjalizacja
 EXPECTED_MARKERS = 4
-img_loader = Image('img/fix_alignment')
+img_loader = Image('img/fix_alignment/')
 detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
 data = Data(expected_markers=EXPECTED_MARKERS)
 

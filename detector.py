@@ -4,14 +4,11 @@ from image_processor import ImageProcessor
 
 
 class ArucoDetector:
-    def __init__(self, expected_markers=4, contrast_step=5, steps=10):
+    def __init__(self, expected_markers=4, contrast_step=20, steps=6):
         self.expected_markers = expected_markers
         self.contrast_step = contrast_step
         self.steps = steps
         self.image_processor = ImageProcessor()
-
-        # Wybór metody przetwarzania kontrastu
-        self.contrast_method = "legacy"  # można zmienić na: "clahe", "equalizer"
 
         # Dictionary types to check
         self.dictionaries = {
@@ -78,25 +75,12 @@ class ArucoDetector:
 
     def process_image(self, image, contrast=0):
         """
-        Process image with selected contrast enhancement method.
-
-        Args:
-            image: Input grayscale image
-            contrast: Contrast value (interpretation depends on method)
-        Returns:
-            Processed image
+        Process image with contrast enhancement.
         """
         if contrast == 0:
             return image
 
-        if self.contrast_method == "legacy":
-            return self.image_processor.enhance_contrast_legacy(image, contrast)
-        elif self.contrast_method == "clahe":
-            return self.image_processor.enhance_contrast_clahe(image, clip_limit=contrast)
-        elif self.contrast_method == "equalizer":
-            return self.image_processor.enhance_contrast_equalizer(image)
-        else:
-            raise ValueError(f"Unknown contrast method: {self.contrast_method}")
+        return self.image_processor.enhance_contrast_legacy(image, contrast)
 
     def detect_dictionary(self, gray):
         if self.dictionary is None:
@@ -123,91 +107,53 @@ class ArucoDetector:
         return True
 
     def detect(self, frame, data, frame_index):
+        """
+        Detect markers with cumulative contrast enhancement.
+        Run all 3 stages for all markers on each contrast level to find best detection.
+        """
         if frame is None:
             return False
 
-        original_gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        # Dictionary to store best detection for each marker
+        best_detections = {}  # marker_id -> (corners, params, contrast_level)
 
-        # Initialize detection results
-        self.detected_markers = []
-        found_ids = set()
+        # Initial conversion to grayscale
+        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-        # Try detection with increasing contrast
+        # Main loop - try detection with increasing contrast
         for step in range(self.steps):
-            contrast = step * self.contrast_step
-            current_gray = self.process_image(original_gray, contrast)
+            current_contrast = step * self.contrast_step
+            print(f"\n=== Detection attempt {step + 1}/{self.steps} (contrast: {current_contrast}) ===")
 
-            if not self.detect_dictionary(current_gray):
+            # Make sure we have correct dictionary
+            if not self.detect_dictionary(gray):
                 return False
 
-            if contrast == 0:
-                print(f"\n=== Starting detection with original image ===")
-            else:
-                print(f"\n=== Starting detection with {self.contrast_method} contrast {contrast} ===")
-
             # Stage 1: Default Detection
-            print("\n=== Stage 1: Default Detection ===")
             detector = cv.aruco.ArucoDetector(self.dictionary, self.default_params)
-            corners, ids, _ = detector.detectMarkers(current_gray)
+            corners, ids, _ = detector.detectMarkers(gray)
 
-            stage1_found = []
             if ids is not None:
                 for i, corners_i in enumerate(corners):
                     marker_id = int(ids[i][0])
-                    if 0 <= marker_id < self.expected_markers and marker_id not in found_ids:
-                        self.detected_markers.append((marker_id, corners_i, self.default_params))
-                        stage1_found.append(marker_id)
-                        found_ids.add(marker_id)
-
-            print(
-                f"Found {len(stage1_found)}/{self.expected_markers - len(found_ids - set(stage1_found))} markers (ID={', ID='.join(map(str, sorted(stage1_found)))})" if stage1_found else f"Found 0/{self.expected_markers - len(found_ids)} markers")
-
-            # If all markers found, finish detection
-            if len(found_ids) == self.expected_markers:
-                print("\n=== Detection complete. Success ===")
-                data.add_detection(frame_index, self.detected_markers, frame.shape[1], frame.shape[0])
-                return True
+                    if 0 <= marker_id < self.expected_markers:
+                        best_detections[marker_id] = (corners_i, self.default_params, current_contrast)
 
             # Stage 2: Quick Scan
-            missing_ids = sorted(set(range(self.expected_markers)) - found_ids)
-            print(f"\n=== Stage 2: Quick Scan ===")
-            print(f"Looking for ID={', ID='.join(map(str, missing_ids))}")
-
             detector = cv.aruco.ArucoDetector(self.dictionary, self.quick_params)
-            corners, ids, _ = detector.detectMarkers(current_gray)
+            corners, ids, _ = detector.detectMarkers(gray)
 
-            stage2_found = []
             if ids is not None:
                 for i, corners_i in enumerate(corners):
                     marker_id = int(ids[i][0])
-                    if marker_id in missing_ids:
-                        self.detected_markers.append((marker_id, corners_i, self.quick_params))
-                        stage2_found.append(marker_id)
-                        found_ids.add(marker_id)
-
-            print(
-                f"Found {len(stage2_found)}/{len(missing_ids)} markers (ID={', ID='.join(map(str, sorted(stage2_found)))})" if stage2_found else f"Found 0/{len(missing_ids)} markers")
-
-            # If all markers found, finish detection
-            if len(found_ids) == self.expected_markers:
-                print("\n=== Detection complete. Success ===")
-                data.add_detection(frame_index, self.detected_markers, frame.shape[1], frame.shape[0])
-                return True
+                    if 0 <= marker_id < self.expected_markers:
+                        best_detections[marker_id] = (corners_i, self.quick_params, current_contrast)
 
             # Stage 3: Detailed Search
-            missing_ids = sorted(set(range(self.expected_markers)) - found_ids)
-            print(f"\n=== Stage 3: Detailed Search ===")
-            print(f"Looking for ID={', ID='.join(map(str, missing_ids))}")
-
-            stage3_found = []
+            missing_ids = set(range(self.expected_markers)) - set(best_detections.keys())
             for marker_id in missing_ids:
-                marker_found = False
                 for win_size in self.win_size_range:
-                    if marker_found:
-                        break
                     for thresh_const in self.thresh_constant_range:
-                        if marker_found:
-                            break
                         for min_perim in self.min_perimeter_range:
                             params = self.create_params(
                                 win_size=win_size,
@@ -221,30 +167,37 @@ class ArucoDetector:
                             )
 
                             detector = cv.aruco.ArucoDetector(self.dictionary, params)
-                            corners, ids, _ = detector.detectMarkers(current_gray)
+                            corners, ids, _ = detector.detectMarkers(gray)
 
-                            if ids is not None:
-                                for i, id_val in enumerate(ids):
-                                    if int(id_val[0]) == marker_id:
-                                        self.detected_markers.append((marker_id, corners[i], params))
-                                        stage3_found.append(marker_id)
-                                        found_ids.add(marker_id)
-                                        marker_found = True
-                                        break
-                            if marker_found:
+                            if ids is not None and marker_id in ids.flatten():
+                                idx = np.where(ids.flatten() == marker_id)[0][0]
+                                best_detections[marker_id] = (corners[idx], params, current_contrast)
                                 break
+                        if marker_id in best_detections:
+                            break
+                    if marker_id in best_detections:
+                        break
 
-            print(
-                f"Found {len(stage3_found)}/{len(missing_ids)} markers (ID={', ID='.join(map(str, sorted(stage3_found)))})" if stage3_found else f"Found 0/{len(missing_ids)} markers")
+            print(f"Found {len(best_detections)}/{self.expected_markers} markers at contrast {current_contrast}")
 
-            # If all markers found, finish detection
-            if len(found_ids) == self.expected_markers:
-                print("\n=== Detection complete. Success ===")
-                data.add_detection(frame_index, self.detected_markers, frame.shape[1], frame.shape[0])
-                return True
+            # If we haven't found all markers, increase contrast for next iteration
+            if len(best_detections) < self.expected_markers:
+                gray = self.process_image(gray, self.contrast_step)
+                continue
 
-        # If we get here, we've tried all contrast levels and still haven't found all markers
-        missing_ids = sorted(set(range(self.expected_markers)) - found_ids)
-        print(f"\n=== Detection complete. Missing ID={', ID='.join(map(str, missing_ids))} ===")
+            # If we found all markers, we can still continue to look for better detections
+            # at higher contrast levels
+
+        # After all contrast levels, prepare final results
+        self.detected_markers = []
+        for marker_id, (corners, params, contrast) in best_detections.items():
+            self.detected_markers.append((marker_id, corners, params))
+            print(f"Marker {marker_id} best detection at contrast {contrast}")
+
+        # Add final detections to data
+        missing_ids = set(range(self.expected_markers)) - set(best_detections.keys())
+        print(f"Detection complete. Found {len(best_detections)}/{self.expected_markers} markers. "
+              f"Missing IDs: {sorted(missing_ids) if missing_ids else 'None'}")
+
         data.add_detection(frame_index, self.detected_markers, frame.shape[1], frame.shape[0])
         return len(self.detected_markers) > 0
