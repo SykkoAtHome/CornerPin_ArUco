@@ -14,7 +14,7 @@ detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
 data = Data(expected_markers=EXPECTED_MARKERS)
 
 # Test on a single image
-frame, index = img_loader.get_frame_by_index(6)
+frame, index = img_loader.get_frame_by_index(3)
 success = detector.detect(frame, data, index)
 
 if success:
