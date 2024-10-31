@@ -120,4 +120,3 @@ Visualization settings can be modified in `visualization_config.py`:
 - Markers must be from supported ArUco dictionary types
 
 ## License
-[Add your license information here]
