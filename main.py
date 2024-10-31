@@ -6,12 +6,12 @@ import pandas as pd
 
 # Inicjalizacja
 EXPECTED_MARKERS = 4
-img_loader = Image('img/aruco_errors/')
+img_loader = Image('img/fix_alignment')
 detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
 data = Data(expected_markers=EXPECTED_MARKERS)
 
 # Test on a single image
-frame, index = img_loader.get_frame_by_index(0)
+frame, index = img_loader.get_frame_by_index(6)
 success = detector.detect(frame, data, index)
 
 if success:

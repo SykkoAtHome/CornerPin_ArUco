@@ -6,22 +6,26 @@ class Data:
     def __init__(self, expected_markers):
         self.expected_markers = expected_markers
 
-        # Tworzenie kolumn dla DataFrame
-        columns = ['frame_index']
+        # Creating columns for DataFrame
+        columns = [
+            'frame_index',
+            'image_width',   # Added column for image width
+            'image_height'   # Added column for image height
+        ]
 
-        # Kolumny dla każdego markera
+        # Columns for each marker
         for id in range(expected_markers):
-            # Współrzędne narożników (4 punkty, każdy ma x,y)
+            # Corner coordinates (4 points, each has x,y)
             for corner in range(4):
                 columns.extend([
                     f'id{id}_corner{corner}_x',
                     f'id{id}_corner{corner}_y'
                 ])
-            # Środek markera (dla kompatybilności wstecznej i szybkiego dostępu)
+            # Marker center (for backward compatibility and quick access)
             columns.extend([f'id{id}_center_x', f'id{id}_center_y'])
-            # Kąt orientacji markera (w stopniach)
+            # Marker orientation angle (in degrees)
             columns.append(f'id{id}_angle')
-            # Parametry detekcji
+            # Detection parameters
             columns.extend([
                 f'id{id}_win_size',
                 f'id{id}_thresh_const',
@@ -32,54 +36,60 @@ class Data:
 
         self.df = pd.DataFrame(columns=columns)
 
-    def add_detection(self, frame_index, markers_data):
+    def add_detection(self, frame_index, markers_data, image_width=None, image_height=None):
         """
-        Dodaje detekcje do DataFrame.
+        Adds detections to DataFrame.
 
-        markers_data: lista krotek (id, corners, params), gdzie:
-            - id: identyfikator markera
-            - corners: tablica narożników (1,4,2)
-            - params: słownik parametrów detekcji lub None dla domyślnych
-        frame_index: numer klatki
+        markers_data: list of tuples (id, corners, params), where:
+            - id: marker identifier
+            - corners: array of corners (1,4,2)
+            - params: detection parameters dictionary or None for defaults
+        frame_index: frame number
+        image_width: width of the processed image
+        image_height: height of the processed image
         """
-        row_data = {'frame_index': frame_index}
+        row_data = {
+            'frame_index': frame_index,
+            'image_width': image_width if image_width is not None else np.nan,
+            'image_height': image_height if image_height is not None else np.nan
+        }
 
-        # Inicjalizacja wszystkich wartości jako NaN
+        # Initialize all values as NaN
         for id in range(self.expected_markers):
-            # Narożniki
+            # Corners
             for corner in range(4):
                 row_data[f'id{id}_corner{corner}_x'] = np.nan
                 row_data[f'id{id}_corner{corner}_y'] = np.nan
-            # Środek i orientacja
+            # Center and orientation
             row_data[f'id{id}_center_x'] = np.nan
             row_data[f'id{id}_center_y'] = np.nan
             row_data[f'id{id}_angle'] = np.nan
-            # Parametry
+            # Parameters
             row_data[f'id{id}_win_size'] = np.nan
             row_data[f'id{id}_thresh_const'] = np.nan
             row_data[f'id{id}_min_perim'] = np.nan
             row_data[f'id{id}_approx_acc'] = np.nan
             row_data[f'id{id}_corner_dist'] = np.nan
 
-        # Wypełnienie wykrytych markerów
+        # Fill detected markers
         for marker_id, corners, params in markers_data:
             if marker_id < self.expected_markers:
-                # corners ma kształt (1,4,2), więc bierzemy corners[0]
+                # corners has shape (1,4,2), so we take corners[0]
                 for corner_idx, point in enumerate(corners[0]):
                     row_data[f'id{marker_id}_corner{corner_idx}_x'] = point[0]
                     row_data[f'id{marker_id}_corner{corner_idx}_y'] = point[1]
 
-                # Oblicz i zapisz środek
+                # Calculate and save center
                 center = corners[0].mean(axis=0)
                 row_data[f'id{marker_id}_center_x'] = center[0]
                 row_data[f'id{marker_id}_center_y'] = center[1]
 
-                # Oblicz i zapisz kąt orientacji
-                vec = corners[0][1] - corners[0][0]  # wektor od punktu 0 do 1
+                # Calculate and save orientation angle
+                vec = corners[0][1] - corners[0][0]  # vector from point 0 to 1
                 angle = np.degrees(np.arctan2(vec[1], vec[0]))
                 row_data[f'id{marker_id}_angle'] = angle
 
-                # Zapisz parametry detekcji
+                # Save detection parameters
                 if params is not None:
                     row_data[f'id{marker_id}_win_size'] = params.adaptiveThreshWinSizeMin
                     row_data[f'id{marker_id}_thresh_const'] = params.adaptiveThreshConstant
@@ -91,7 +101,7 @@ class Data:
 
     def get_marker_corners(self, frame_idx, marker_id):
         """
-        Zwraca narożniki konkretnego markera dla danej klatki w formacie (1,4,2).
+        Returns corners of specific marker for given frame in (1,4,2) format.
         """
         row = self.df[self.df['frame_index'] == frame_idx]
         if row.empty:
@@ -108,12 +118,12 @@ class Data:
         if np.isnan(corners).any():
             return None
 
-        # Przekształć do formatu (1,4,2) wymaganego przez OpenCV
+        # Transform to (1,4,2) format required by OpenCV
         return corners.reshape(1, 4, 2)
 
     def get_marker_params(self, frame_idx, marker_id):
         """
-        Zwraca parametry detekcji dla konkretnego markera.
+        Returns detection parameters for specific marker.
         """
         row = self.df[self.df['frame_index'] == frame_idx]
         if row.empty:
