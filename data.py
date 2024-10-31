@@ -9,8 +9,8 @@ class Data:
         # Creating columns for DataFrame
         columns = [
             'frame_index',
-            'image_width',   # Added column for image width
-            'image_height'   # Added column for image height
+            'image_width',
+            'image_height'
         ]
 
         # Columns for each marker
@@ -33,6 +33,8 @@ class Data:
                 f'id{id}_approx_acc',
                 f'id{id}_corner_dist'
             ])
+            # Add contrast column for each marker
+            columns.append(f'id{id}_contrast')
 
         self.df = pd.DataFrame(columns=columns)
 
@@ -40,10 +42,11 @@ class Data:
         """
         Adds detections to DataFrame.
 
-        markers_data: list of tuples (id, corners, params), where:
+        markers_data: list of tuples (id, corners, params, contrast), where:
             - id: marker identifier
             - corners: array of corners (1,4,2)
             - params: detection parameters dictionary or None for defaults
+            - contrast: contrast level at which marker was detected
         frame_index: frame number
         image_width: width of the processed image
         image_height: height of the processed image
@@ -70,9 +73,11 @@ class Data:
             row_data[f'id{id}_min_perim'] = np.nan
             row_data[f'id{id}_approx_acc'] = np.nan
             row_data[f'id{id}_corner_dist'] = np.nan
+            # Initialize contrast
+            row_data[f'id{id}_contrast'] = np.nan
 
         # Fill detected markers
-        for marker_id, corners, params in markers_data:
+        for marker_id, corners, params, contrast in markers_data:
             if marker_id < self.expected_markers:
                 # corners has shape (1,4,2), so we take corners[0]
                 for corner_idx, point in enumerate(corners[0]):
@@ -89,6 +94,9 @@ class Data:
                 angle = np.degrees(np.arctan2(vec[1], vec[0]))
                 row_data[f'id{marker_id}_angle'] = angle
 
+                # Save contrast level
+                row_data[f'id{marker_id}_contrast'] = contrast
+
                 # Save detection parameters
                 if params is not None:
                     row_data[f'id{marker_id}_win_size'] = params.adaptiveThreshWinSizeMin
@@ -102,6 +110,14 @@ class Data:
     def get_marker_corners(self, frame_idx, marker_id):
         """
         Returns corners of specific marker for given frame in (1,4,2) format.
+        If marker not found or data incomplete, returns None.
+
+        Args:
+            frame_idx: Frame index to get corners for
+            marker_id: Marker ID to get corners for
+
+        Returns:
+            numpy array in (1,4,2) format or None if corners not found
         """
         row = self.df[self.df['frame_index'] == frame_idx]
         if row.empty:
@@ -112,11 +128,10 @@ class Data:
         for i in range(4):
             x = row[f'id{marker_id}_corner{i}_x']
             y = row[f'id{marker_id}_corner{i}_y']
+            if np.isnan(x) or np.isnan(y):
+                return None
             corners[i, 0] = x
             corners[i, 1] = y
-
-        if np.isnan(corners).any():
-            return None
 
         # Transform to (1,4,2) format required by OpenCV
         return corners.reshape(1, 4, 2)

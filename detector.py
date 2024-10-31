@@ -4,11 +4,12 @@ from image_processor import ImageProcessor
 
 
 class ArucoDetector:
-    def __init__(self, expected_markers=4, contrast_step=20, steps=6):
+    def __init__(self, expected_markers=4, contrast_step=15, steps=20, initial_contrast=0):
         self.expected_markers = expected_markers
         self.contrast_step = contrast_step
         self.steps = steps
         self.image_processor = ImageProcessor()
+        self.initial_contrast = initial_contrast
 
         # Dictionary types to check
         self.dictionaries = {
@@ -106,6 +107,36 @@ class ArucoDetector:
             return False
         return True
 
+    def get_initial_contrast(self, data, current_frame_index):
+        """
+        Determine initial contrast based on previous frame data.
+        Returns minimum contrast value from previous frame minus contrast_step.
+        If no previous data available or all values are NaN, returns 0.
+        """
+        if current_frame_index <= 0:
+            return 0
+
+        # Get data from previous frame
+        prev_frame = data.df[data.df['frame_index'] == current_frame_index - 1]
+        if prev_frame.empty:
+            return 0
+
+        # Get contrast columns for all markers
+        contrast_columns = [f'id{i}_contrast' for i in range(self.expected_markers)]
+        contrast_values = prev_frame[contrast_columns].iloc[0]
+
+        # Filter out NaN values and find minimum
+        valid_contrasts = contrast_values.dropna()
+        if valid_contrasts.empty:
+            return 0
+
+        # Calculate new initial contrast
+        min_contrast = valid_contrasts.min()
+        initial_contrast = min_contrast - self.contrast_step
+
+        # Ensure contrast is not negative
+        return max(0, initial_contrast)
+
     def detect(self, frame, data, frame_index):
         """
         Detect markers with cumulative contrast enhancement.
@@ -120,9 +151,14 @@ class ArucoDetector:
         # Initial conversion to grayscale
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
+        # Apply initial contrast if specified
+        if self.initial_contrast > 0:
+            gray = self.process_image(gray, self.initial_contrast)
+            print(f"\n=== Starting with initial contrast: {self.initial_contrast} ===")
+
         # Main loop - try detection with increasing contrast
         for step in range(self.steps):
-            current_contrast = step * self.contrast_step
+            current_contrast = self.initial_contrast + step * self.contrast_step
             print(f"\n=== Detection attempt {step + 1}/{self.steps} (contrast: {current_contrast}) ===")
 
             # Make sure we have correct dictionary
@@ -191,7 +227,7 @@ class ArucoDetector:
         # After all contrast levels, prepare final results
         self.detected_markers = []
         for marker_id, (corners, params, contrast) in best_detections.items():
-            self.detected_markers.append((marker_id, corners, params))
+            self.detected_markers.append((marker_id, corners, params, contrast))  # dodane contrast
             print(f"Marker {marker_id} best detection at contrast {contrast}")
 
         # Add final detections to data
