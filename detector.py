@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from image_processor import ImageProcessor
 
 
 class ArucoDetector:
@@ -7,6 +8,10 @@ class ArucoDetector:
         self.expected_markers = expected_markers
         self.contrast_step = contrast_step
         self.steps = steps
+        self.image_processor = ImageProcessor()
+
+        # Wybór metody przetwarzania kontrastu
+        self.contrast_method = "legacy"  # można zmienić na: "clahe", "equalizer"
 
         # Dictionary types to check
         self.dictionaries = {
@@ -71,18 +76,27 @@ class ArucoDetector:
         params.cornerRefinementMinAccuracy = 0.1
         return params
 
-    def enhance_contrast_legacy(self, image, contrast):
+    def process_image(self, image, contrast=0):
         """
-        Enhance contrast using Photoshop-like legacy formula.
+        Process image with selected contrast enhancement method.
 
         Args:
             image: Input grayscale image
-            contrast: Contrast value in range [-100, 100]
+            contrast: Contrast value (interpretation depends on method)
+        Returns:
+            Processed image
         """
-        f = image.astype(float)
-        contrast_factor = contrast / 100.0
-        adjusted = (f - 128) * (1 + contrast_factor) + 128
-        return np.clip(adjusted, 0, 255).astype(np.uint8)
+        if contrast == 0:
+            return image
+
+        if self.contrast_method == "legacy":
+            return self.image_processor.enhance_contrast_legacy(image, contrast)
+        elif self.contrast_method == "clahe":
+            return self.image_processor.enhance_contrast_clahe(image, clip_limit=contrast)
+        elif self.contrast_method == "equalizer":
+            return self.image_processor.enhance_contrast_equalizer(image)
+        else:
+            raise ValueError(f"Unknown contrast method: {self.contrast_method}")
 
     def detect_dictionary(self, gray):
         if self.dictionary is None:
@@ -121,7 +135,7 @@ class ArucoDetector:
         # Try detection with increasing contrast
         for step in range(self.steps):
             contrast = step * self.contrast_step
-            current_gray = self.enhance_contrast_legacy(original_gray, contrast) if contrast > 0 else original_gray
+            current_gray = self.process_image(original_gray, contrast)
 
             if not self.detect_dictionary(current_gray):
                 return False
@@ -129,7 +143,7 @@ class ArucoDetector:
             if contrast == 0:
                 print(f"\n=== Starting detection with original image ===")
             else:
-                print(f"\n=== Starting detection with contrast {contrast} ===")
+                print(f"\n=== Starting detection with {self.contrast_method} contrast {contrast} ===")
 
             # Stage 1: Default Detection
             print("\n=== Stage 1: Default Detection ===")
