@@ -1,48 +1,75 @@
-import cv2
-from image import Image
-from detector import ArucoDetector
 from data import Data
-from draw import Draw, MarkerElements
-import pandas as pd
-import os
+from data_processor import DataProcessor
+from detector import ArucoDetector
+from image import Image
 
-# Initialize components
-name = "testy"
-EXPECTED_MARKERS = 4
-img_loader = Image('img/fix_alignment/')
-detector = ArucoDetector(expected_markers=EXPECTED_MARKERS)
-data = Data(expected_markers=EXPECTED_MARKERS)
 
-# Initialize Draw with configuration
-draw = Draw()
-elements = MarkerElements(
-    outline=True,
-    corners=True,
-    corner_numbers=True,
-    center=True,
-    id=False,
-    orientation=True,
-    angle=True
-)
-draw.set_marker_elements(elements)
-draw.set_marker_visibility([0, 1, 2, 3])  # Show all markers
+def process_all_frames(image_dir: str, expected_markers: int = 4, initial_contrast: int = 0):
+    """
+    Process all frames in directory using ArucoDetector
 
-# Test on a single image
-frame, index = img_loader.get_frame_by_index(5)
-success = detector.detect(frame, data, index)
+    Args:
+        image_dir: Directory containing image frames
+        expected_markers: Number of markers to detect (default: 4)
+        initial_contrast: Initial contrast value for detection (default: 0)
 
-if success:
-    # Visualization based on DataFrame data
-    img_markers = draw.draw_markers(frame, data, index)
+    Returns:
+        Data object with detection results
+    """
+    # Initialize objects
+    image_loader = Image(image_dir)
+    data = Data(expected_markers)
+    detector = ArucoDetector(expected_markers=expected_markers,
+                             initial_contrast=initial_contrast)
 
-    # Display DataFrame
-    print("\nCollected data:")
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', None)
-    print(data.df)
+    total_frames = image_loader.get_total_frames()
+    total_frames = 3
+    print(f"Processing {total_frames} frames...")
 
-    # Display image
-    cv2.imshow(f'Frame {index} with markers', img_markers)
-    print("\nPress any key to proceed to next visualization...")
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # Process each frame
+    for idx in range(total_frames):
+        frame, frame_number = image_loader.get_frame_by_index(idx)
+
+        if frame is None:
+            print(f"Error: Could not load frame at index {idx}")
+            continue
+
+        print(f"\nProcessing frame {frame_number} ({idx + 1}/{total_frames})")
+
+        # Update initial contrast based on previous frame results
+        if idx > 0:
+            detector.initial_contrast = detector.get_initial_contrast(data, frame_number)
+
+        # Detect markers
+        success = detector.detect(frame, data, frame_number)
+
+        if not success:
+            print(f"Warning: No markers detected in frame {frame_number}")
+            continue
+
+        # Print detection summary for this frame
+        detected_count = len(detector.detected_markers)
+        print(f"Successfully detected {detected_count}/{expected_markers} markers")
+
+    print("\nProcessing complete!")
+    print(f"Total frames processed: {total_frames}")
+
+    return data
+
+
+# Example usage:
+if __name__ == "__main__":
+    # Directory containing image frames
+    image_directory = "img/aruco4"
+
+    # Process all frames
+    result_data = process_all_frames(
+        image_dir=image_directory,
+        expected_markers=4,
+        initial_contrast=0
+    )
+
+    # Now you can use the result_data object for cornerpin export or other operations
+    processor = DataProcessor(result_data)
+    processor.export_cornerpin("export/nuke_output.nk", point_type='center')
+    print(result_data.df.to_string())
