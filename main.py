@@ -2,6 +2,7 @@ from data import Data
 from data_processor import DataProcessor
 from detector import ArucoDetector
 from image import Image
+from export_data import ExportData
 
 
 def process_all_frames(image_dir: str, expected_markers: int = 4, initial_contrast: int = 0):
@@ -23,7 +24,7 @@ def process_all_frames(image_dir: str, expected_markers: int = 4, initial_contra
                              initial_contrast=initial_contrast)
 
     total_frames = image_loader.get_total_frames()
-    total_frames = 3
+    total_frames = 4
     print(f"Processing {total_frames} frames...")
 
     # Process each frame
@@ -70,6 +71,5 @@ if __name__ == "__main__":
     )
 
     # Now you can use the result_data object for cornerpin export or other operations
-    processor = DataProcessor(result_data)
-    processor.export_cornerpin("export/nuke_output.nk", point_type='center')
-    print(result_data.df.to_string())
+    exporter = ExportData(result_data)
+    exporter.export_cornerpin("export/nuke_output.nk", point_type='outer')

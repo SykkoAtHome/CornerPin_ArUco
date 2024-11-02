@@ -85,142 +85,100 @@ class DataProcessor:
 
         return intersection_x, intersection_y
 
-    def _get_cornerpin_point(self, row, marker_id: int, point_type: str) -> tuple:
+    def calculate_aspect_ratio(self, frame_index: int) -> dict:
         """
-        Get point coordinates for cornerpin based on point type.
-        Points are transformed to Nuke coordinate system where Y is inverted.
-        """
-        try:
-            # Get image height for Y coordinate transformation
-            image_height = row['image_height']
-
-            if point_type == 'center':
-                x = row[f'id{marker_id}_center_x']
-                y = row[f'id{marker_id}_center_y']
-                if np.isnan(x) or np.isnan(y):
-                    return None
-                # Transform Y coordinate
-                y = image_height - y
-                return (x, y)
-
-            # Mapping for outer/inner corners remains the same
-            outer_corners = {
-                0: (0, 0),  # ID0 corner 0
-                1: (1, 1),  # ID1 corner 1
-                2: (2, 2),  # ID2 corner 2
-                3: (3, 3)  # ID3 corner 3
-            }
-
-            inner_corners = {
-                0: (0, 2),  # ID0 corner 2
-                1: (1, 3),  # ID1 corner 3
-                2: (2, 0),  # ID2 corner 0
-                3: (3, 1)  # ID3 corner 1
-            }
-
-            if point_type == 'outer':
-                marker_id, corner_num = outer_corners[marker_id]
-            else:  # inner
-                marker_id, corner_num = inner_corners[marker_id]
-
-            x = row[f'id{marker_id}_corner{corner_num}_x']
-            y = row[f'id{marker_id}_corner{corner_num}_y']
-            if np.isnan(x) or np.isnan(y):
-                return None
-
-            # Transform Y coordinate
-            y = image_height - y
-            return (x, y)
-
-        except Exception as e:
-            print(f"Error getting cornerpin point: {str(e)}")
-            return None
-
-    def export_cornerpin(self, output_path: str, point_type: str = 'center', frame_range: tuple = None) -> bool:
-        """
-        Export markers data to Nuke CornerPin2D format.
+        Calculate aspect ratio of the marker rectangle.
+        Returns both outer and inner rectangle ratios.
 
         Args:
-            output_path: Path to output file
-            point_type: Type of points to export ('center', 'outer', 'inner')
-            frame_range: Tuple of (start_frame, end_frame) to export, None for all frames
+            frame_index: Frame number to analyze
 
         Returns:
-            bool: True if export successful, False otherwise
+            dict with calculated ratios and distances:
+            {
+                'outer_ratio': float,  # width/height for outer points
+                'inner_ratio': float,  # width/height for inner points
+                'average_ratio': float,  # average of both ratios
+                'outer_width': float,  # width of outer rectangle
+                'outer_height': float,  # height of outer rectangle
+                'inner_width': float,  # width of inner rectangle
+                'inner_height': float  # height of inner rectangle
+            }
         """
-        # Validate point type
-        if point_type not in ['center', 'outer', 'inner']:
-            print(f"Invalid point type: {point_type}")
-            return False
+        frame_data = self.data.df[self.data.df['frame_index'] == frame_index]
+        if frame_data.empty:
+            print(f"No data found for frame {frame_index}")
+            return None
 
-        # Get frame data
-        df = self.data.df
-        if frame_range:
-            start_frame, end_frame = frame_range
-            df = df[(df['frame_index'] >= start_frame) & (df['frame_index'] <= end_frame)]
+        row = frame_data.iloc[0]
 
-        if df.empty:
-            print("No data to export")
-            return False
+        # Get outer rectangle points
+        outer_points = {
+            'top_left': (row['id0_corner0_x'], row['id0_corner0_y']),  # ID0 corner 0
+            'top_right': (row['id1_corner1_x'], row['id1_corner1_y']),  # ID1 corner 1
+            'bottom_right': (row['id2_corner2_x'], row['id2_corner2_y']),  # ID2 corner 2
+            'bottom_left': (row['id3_corner3_x'], row['id3_corner3_y'])  # ID3 corner 3
+        }
 
-        try:
-            with open(output_path, 'w') as f:
-                f.write("CornerPin2D {\n")
+        # Get inner rectangle points
+        inner_points = {
+            'top_left': (row['id0_corner2_x'], row['id0_corner2_y']),  # ID0 corner 2
+            'top_right': (row['id1_corner3_x'], row['id1_corner3_y']),  # ID1 corner 3
+            'bottom_right': (row['id2_corner0_x'], row['id2_corner0_y']),  # ID2 corner 0
+            'bottom_left': (row['id3_corner1_x'], row['id3_corner1_y'])  # ID3 corner 1
+        }
 
-                # Write points in correct order according to markers_info.txt
-                # ID3 -> to1, ID2 -> to2, ID1 -> to3, ID0 -> to4
-                marker_order = [3, 2, 1, 0]
+        # Calculate distances for outer rectangle
+        outer_width_top = self._calculate_distance(
+            outer_points['top_left'], outer_points['top_right'])
+        outer_width_bottom = self._calculate_distance(
+            outer_points['bottom_left'], outer_points['bottom_right'])
+        outer_height_left = self._calculate_distance(
+            outer_points['top_left'], outer_points['bottom_left'])
+        outer_height_right = self._calculate_distance(
+            outer_points['top_right'], outer_points['bottom_right'])
 
-                for i, marker_id in enumerate(marker_order):
-                    points_x = []
-                    points_y = []
-                    last_valid_frame = None
+        # Calculate distances for inner rectangle
+        inner_width_top = self._calculate_distance(
+            inner_points['top_left'], inner_points['top_right'])
+        inner_width_bottom = self._calculate_distance(
+            inner_points['bottom_left'], inner_points['bottom_right'])
+        inner_height_left = self._calculate_distance(
+            inner_points['top_left'], inner_points['bottom_left'])
+        inner_height_right = self._calculate_distance(
+            inner_points['top_right'], inner_points['bottom_right'])
 
-                    for _, row in df.iterrows():
-                        frame = int(row['frame_index'])
-                        point = self._get_cornerpin_point(row, marker_id, point_type)
+        # Average the widths and heights
+        outer_width = (outer_width_top + outer_width_bottom) / 2
+        outer_height = (outer_height_left + outer_height_right) / 2
+        inner_width = (inner_width_top + inner_width_bottom) / 2
+        inner_height = (inner_height_left + inner_height_right) / 2
 
-                        if point is None:
-                            if last_valid_frame is not None:
-                                points_x.append(f"x{frame}")
-                                points_y.append(f"x{frame}")
-                        else:
-                            if last_valid_frame is None or frame > last_valid_frame + 1:
-                                x_val = f"x{frame} {point[0]}"
-                                y_val = f"x{frame} {point[1]}"
-                            else:
-                                x_val = str(point[0])
-                                y_val = str(point[1])
+        # Calculate ratios
+        outer_ratio = outer_width / outer_height
+        inner_ratio = inner_width / inner_height
+        average_ratio = (outer_ratio + inner_ratio) / 2
 
-                            points_x.append(x_val)
-                            points_y.append(y_val)
-                            last_valid_frame = frame
+        print(f"\nAspect Ratio Analysis for frame {frame_index}:")
+        print(f"Outer rectangle - Width: {outer_width:.2f}, Height: {outer_height:.2f}, Ratio: {outer_ratio:.6f}")
+        print(f"Inner rectangle - Width: {inner_width:.2f}, Height: {inner_height:.2f}, Ratio: {inner_ratio:.6f}")
+        print(f"Average aspect ratio: {average_ratio:.6f}")
 
-                    x_curve = " ".join(points_x)
-                    y_curve = " ".join(points_y)
+        return {
+            'outer_ratio': outer_ratio,
+            'inner_ratio': inner_ratio,
+            'average_ratio': average_ratio,
+            'outer_width': outer_width,
+            'outer_height': outer_height,
+            'inner_width': inner_width,
+            'inner_height': inner_height
+        }
 
-                    nuke_point = i + 1  # to1, to2, to3, to4
-                    line = " to" + str(nuke_point) + " {{curve " + x_curve + "} {curve " + y_curve + "}}\n"
-                    f.write(line)
-
-                # Get actual image dimensions from DataFrame
-                width = int(df['image_width'].iloc[0])  # Get width from first frame
-                height = int(df['image_height'].iloc[0])  # Get height from first frame
-
-                # Write 'from' points using actual image dimensions
-                f.write(" from1 {0 0}\n")  # Top-left
-                f.write(f" from2 {{{width} 0}}\n")  # Top-right
-                f.write(f" from3 {{{width} {height}}}\n")  # Bottom-right
-                f.write(f" from4 {{0 {height}}}\n")  # Bottom-left
-
-                f.write(' invert true\n')
-                f.write(' name CornerPin2D1\n')
-                f.write(' xpos 0\n')
-                f.write(' ypos 0\n')
-                f.write('}\n')
-
-            return True
-
-        except Exception as e:
-            print(f"Error exporting cornerpin: {str(e)}")
-            return False
+    def _calculate_distance(self, point1: tuple, point2: tuple) -> float:
+        """
+        Calculate Euclidean distance between two points
+        """
+        from math import sqrt
+        x1, y1 = point1
+        x2, y2 = point2
+        return sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
