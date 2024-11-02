@@ -24,7 +24,6 @@ def process_all_frames(image_dir: str, expected_markers: int = 4, initial_contra
                              initial_contrast=initial_contrast)
 
     total_frames = image_loader.get_total_frames()
-    total_frames = 4
     print(f"Processing {total_frames} frames...")
 
     # Process each frame

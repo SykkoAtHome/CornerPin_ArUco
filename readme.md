@@ -41,7 +41,7 @@ This project implements a robust ArUco marker detection system with advanced con
 ## Installation
 1. Clone the repository:
 ```bash
-git clone [repository-url]
+git clone https://github.com/SykkoAtHome/CornerPin_ArUco.git
 ```
 
 2. Install required dependencies:
@@ -132,7 +132,7 @@ The system provides various analysis capabilities:
 - Provides additional validation of marker positions
 
 ## Export Capabilities
-The system can export tracking data to various formats:
+The system can export tracking data to Nuke:
 
 ### Nuke CornerPin2D
 - Exports marker positions as CornerPin2D node
@@ -172,4 +172,3 @@ Visualization settings can be modified in `visualization_config.py`:
 - Markers must be from supported ArUco dictionary types
 
 ## License
-[Your License Information Here]
