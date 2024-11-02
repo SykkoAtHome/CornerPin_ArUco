@@ -7,8 +7,8 @@ This project implements a robust ArUco marker detection system with advanced con
 - Detection of 4 ArUco markers in predefined positions:
   - ID 0: Top-left corner
   - ID 1: Top-right corner
-  - ID 2: Bottom-left corner
-  - ID 3: Bottom-right corner
+  - ID 2: Bottom-right corner
+  - ID 3: Bottom-left corner
 - Adaptive contrast enhancement for improved marker detection
 - Multi-stage detection process:
   1. Default parameters detection
@@ -16,6 +16,8 @@ This project implements a robust ArUco marker detection system with advanced con
   3. Detailed search with parameter sweeping
 - Comprehensive data collection and storage
 - Visual feedback with marker outlines, corners, IDs, and orientation
+- Export capabilities to Nuke (CornerPin2D format)
+- Aspect ratio calculation for marker rectangle
 
 ## Requirements
 - Python 3.x
@@ -25,12 +27,14 @@ This project implements a robust ArUco marker detection system with advanced con
 
 ## Project Structure
 ```
-├── data.py               # Data management and storage
-├── detector.py           # ArUco marker detection implementation
-├── image.py             # Image loading and visualization
-├── image_processor.py   # Image processing utilities
-├── main.py             # Main application entry point
-├── test.py             # Testing utilities
+├── data.py                # Data management and storage
+├── data_processor.py      # Data analysis and calculations
+├── detector.py            # ArUco marker detection implementation
+├── draw.py               # Visualization utilities
+├── export_data.py        # Data export functionality
+├── image.py              # Image loading and handling
+├── image_processor.py    # Image processing utilities
+├── main.py              # Main application entry point
 └── visualization_config.py # Visualization settings
 ```
 
@@ -42,11 +46,12 @@ git clone [repository-url]
 
 2. Install required dependencies:
 ```bash
-pip install opencv-python numpy pandas
+pip install -r requirements.txt
 ```
 
 ## Usage
-1. Basic usage with main.py:
+
+### Basic Detection
 ```python
 from image import Image
 from detector import ArucoDetector
@@ -60,10 +65,40 @@ data = Data(expected_markers=4)
 # Process single frame
 frame, index = img_loader.get_frame_by_index(0)
 success = detector.detect(frame, data, index)
+```
 
-# Visualize results
-if success:
-    img_markers = img_loader.draw_markers(frame, data, index)
+### Analysis and Export
+```python
+# Calculate aspect ratio
+processor = DataProcessor(data)
+ratios = processor.calculate_aspect_ratio(frame_index=0)
+if ratios:
+    print(f"Marker rectangle aspect ratio: {ratios['average_ratio']:.6f}")
+
+# Export to Nuke
+exporter = ExportData(data)
+exporter.export_cornerpin("output/cornerpin.nk", point_type='center')
+```
+
+### Visualization
+```python
+from draw import Draw, MarkerElements
+
+# Configure visualization
+drawer = Draw()
+elements = MarkerElements(
+    outline=True,
+    corners=True,
+    corner_numbers=True,
+    center=True,
+    id=True,
+    orientation=True,
+    angle=True
+)
+drawer.set_marker_elements(elements)
+
+# Draw markers
+markers_visualization = drawer.draw_markers(data, frame_index=0)
 ```
 
 ## Detection Process
@@ -82,6 +117,32 @@ The system employs a three-stage detection process with increasing complexity:
    - Adaptive contrast enhancement
    - Multiple dictionary types support
 
+## Data Analysis
+The system provides various analysis capabilities:
+
+### Aspect Ratio Calculation
+- Calculates aspect ratio using both outer and inner marker points
+- Provides average ratio for improved accuracy
+- Helps validate marker detection accuracy
+- Can be used for calibration purposes
+
+### Relative Center Calculation
+- Calculates the center point of the marker rectangle
+- Uses intersection of diagonal lines
+- Provides additional validation of marker positions
+
+## Export Capabilities
+The system can export tracking data to various formats:
+
+### Nuke CornerPin2D
+- Exports marker positions as CornerPin2D node
+- Supports different point types:
+  - Center points
+  - Outer corners
+  - Inner corners
+- Handles missing frames and interpolation
+- Maintains correct coordinate system transformation
+
 ## Data Collection
 The system collects comprehensive data for each detected marker:
 - Corner coordinates (x, y for each corner)
@@ -90,15 +151,6 @@ The system collects comprehensive data for each detected marker:
 - Detection parameters
 - Contrast level
 - Frame information
-
-## Visualization
-The visualization system provides:
-- Marker outlines with unique colors
-- Numbered corners
-- Marker IDs
-- Orientation arrows
-- Center points
-- Detection angles
 
 ## Configuration
 Detection parameters can be adjusted in `detector.py`:
@@ -120,3 +172,4 @@ Visualization settings can be modified in `visualization_config.py`:
 - Markers must be from supported ArUco dictionary types
 
 ## License
+[Your License Information Here]
