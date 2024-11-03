@@ -12,9 +12,9 @@ class Image:
         Args:
             directory: Path to directory with image frames
         """
-        self.directory = directory
-        self.images = []  # List of image paths
-        self.frame_index = []  # List of frame indices
+        self.directory = os.path.abspath(directory)
+        self.images = []
+        self.frame_index = []
         self.load_images()
 
     def load_images(self):
@@ -23,7 +23,7 @@ class Image:
         Sort them by frame index.
         """
         for filename in os.listdir(self.directory):
-            file_path = os.path.join(self.directory, filename)
+            file_path = os.path.abspath(os.path.join(self.directory, filename))
             if os.path.isfile(file_path):
                 index = self.extract_index(filename)
                 if index is not None:
@@ -69,12 +69,13 @@ class Image:
             index: Index in the sequence (not frame number)
 
         Returns:
-            tuple: (frame, frame_number) or (None, None) if index invalid
+            tuple: (frame, frame_number, file_path) or (None, None, None) if index invalid
         """
         if 0 <= index < len(self.frame_index):
             frame_path = self.images[index]
-            return cv2.imread(frame_path), self.frame_index[index]
-        return None, None
+            frame = cv2.imread(frame_path)
+            return frame, self.frame_index[index], frame_path
+        return None, None, None
 
     def get_total_frames(self):
         """

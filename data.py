@@ -8,10 +8,11 @@ class Data:
         # Creating columns for DataFrame
         columns = [
             'frame_index',
+            'file_path',
             'image_width',
             'image_height',
-            'center_x',     # Keeping the center columns
-            'center_y'      # but they will be filled later
+            'center_x',
+            'center_y'
         ]
 
         # Columns for each marker
@@ -39,25 +40,24 @@ class Data:
 
         self.df = pd.DataFrame(columns=columns)
 
-    def add_detection(self, frame_index, markers_data, image_width=None, image_height=None):
+    def add_detection(self, frame_index, markers_data, image_width=None, image_height=None, file_path=None):
         """
         Adds detections to DataFrame.
 
-        markers_data: list of tuples (id, corners, params, contrast), where:
-            - id: marker identifier
-            - corners: array of corners (1,4,2)
-            - params: detection parameters dictionary or None for defaults
-            - contrast: contrast level at which marker was detected
-        frame_index: frame number
-        image_width: width of the processed image
-        image_height: height of the processed image
+        Args:
+            frame_index: Frame number
+            markers_data: list of tuples (id, corners, params, contrast)
+            image_width: width of the processed image
+            image_height: height of the processed image
+            file_path: full path to the image file
         """
         row_data = {
             'frame_index': frame_index,
+            'file_path': file_path if file_path is not None else '',  # Dodana ścieżka pliku
             'image_width': image_width if image_width is not None else np.nan,
             'image_height': image_height if image_height is not None else np.nan,
-            'center_x': np.nan,  # Initialize center coordinates as NaN
-            'center_y': np.nan   # They will be calculated later
+            'center_x': np.nan,
+            'center_y': np.nan
         }
 
         # Initialize all values as NaN

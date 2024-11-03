@@ -114,10 +114,16 @@ class ArucoDetector:
             return False
         return True
 
-    def detect(self, frame, data, frame_index):
+    def detect(self, frame, data, frame_index, file_path=None):
         """
         Detect markers with contrast enhancement.
         Each frame starts detection from contrast 0.
+
+        Args:
+            frame: Input image frame
+            data: Data object to store results
+            frame_index: Frame number
+            file_path: Full path to the frame file
         """
         if frame is None:
             return False
@@ -210,5 +216,11 @@ class ArucoDetector:
         print(f"Detection complete. Found {len(best_detections)}/{self.expected_markers} markers. "
               f"Missing IDs: {sorted(missing_ids) if missing_ids else 'None'}")
 
-        data.add_detection(frame_index, self.detected_markers, frame.shape[1], frame.shape[0])
+        data.add_detection(
+            frame_index=frame_index,
+            markers_data=self.detected_markers,
+            image_width=frame.shape[1],
+            image_height=frame.shape[0],
+            file_path=file_path
+        )
         return len(self.detected_markers) > 0
