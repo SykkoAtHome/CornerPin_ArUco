@@ -4,7 +4,7 @@ from image_processor import ImageProcessor
 
 
 class ArucoDetector:
-    def __init__(self, expected_markers=4, contrast_step=85, steps=11):
+    def __init__(self, expected_markers=4, contrast_step=35, steps=6):
         """
         Initialize ArUco detector.
 
