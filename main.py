@@ -74,7 +74,7 @@ draw.set_marker_elements(MarkerElements(
 # Example usage:
 if __name__ == "__main__":
     # Directory containing image frames
-    image_directory = "img/render"
+    image_directory = "img/aruco3"
 
     # Process specific range of frames (e.g., frames 100-200)
     result_data = process_all_frames(
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     print(stability_report)
 
     # Export dataframe as images
-    draw.export_as_image(result_data, "img/marker_visualization")
+    draw.export_as_image(result_data, "img/marker_visualization/aruco3")
 
     # Export results
     # exporter = ExportData(result_data)
