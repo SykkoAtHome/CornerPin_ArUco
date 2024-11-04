@@ -61,23 +61,21 @@ def process_all_frames(image_dir: str, expected_markers: int = 4, frame_range: t
 # Example usage:
 if __name__ == "__main__":
     # Directory containing image frames
-    image_directory = "img/render_mb"
+    image_directory = "img/render"
 
     # Process specific range of frames (e.g., frames 100-200)
     result_data = process_all_frames(
         image_dir=image_directory,
-        expected_markers=4
+        expected_markers=4,
+        frame_range=(0, 50)
     )
 
     # Run analysis
     data_processor = DataProcessor(result_data)
-    stability_report = data_processor.analyze_sequence_stability(threshold_position=5, threshold_angle=3)
+    stability_report = data_processor.analyze_sequence_stability(threshold_position=4.0, threshold_angle=3.0)
     print(stability_report)
 
-    geometry_report = data_processor.analyze_geometric_consistency()
-    print(geometry_report)
-
     # Export results
-    exporter = ExportData(result_data)
-    exporter.export_cornerpin("export/mb.nk", point_type='outer')
-    print(result_data.df.to_string())
+    # exporter = ExportData(result_data)
+    # exporter.export_cornerpin("export/render.nk", point_type='outer')
+    # print(result_data.df.to_string())

@@ -173,88 +173,117 @@ class DataProcessor:
             'inner_height': inner_dims['height']
         }
 
-    def analyze_sequence_stability(self, threshold_position: float = 5.0,
-                                   threshold_angle: float = 5.0,
-                                   frame_range: tuple = None) -> str:
+    def analyze_sequence_stability(self, threshold_position: float = 1.0,
+                                   threshold_angle: float = 2.0,
+                                   neighbor_range: int = 2) -> str:
         """
-        Analyze stability of markers across sequence.
-        """
-        df = self.data.df
-        if frame_range:
-            start_frame, end_frame = frame_range
-            df = df[(df['frame_index'] >= start_frame) & (df['frame_index'] <= end_frame)]
+        Analyze stability of markers detection by comparing with neighboring frames.
+        Anomaly is detected when value significantly differs from average of neighboring frames.
 
-        df = df.sort_values('frame_index')
+        Args:
+            threshold_position: Maximum allowed position deviation from neighbors average
+            threshold_angle: Maximum allowed angle deviation from neighbors average
+            neighbor_range: Number of neighboring frames to analyze before and after current frame
+        """
+        df = self.data.df.sort_values('frame_index')
         anomalies = []
 
-        # Get initial values
-        initial_centers = self._get_marker_centers(df.iloc[0])
-        initial_angles = {i: df.iloc[0][f'id{i}_angle'] for i in range(4)}
-
-        # Analyze each frame
-        for i in range(1, len(df)):
-            current_row = df.iloc[i]
-            frame_index = current_row['frame_index']
-            current_centers = self._get_marker_centers(current_row)
+        # Skip first and last frames according to neighbor_range
+        for i in range(neighbor_range, len(df) - neighbor_range):
+            curr_row = df.iloc[i]
+            frame_index = curr_row['frame_index']
 
             for marker_id in range(4):
-                # Position change
-                position_change = self._calculate_distance(
-                    initial_centers[marker_id],
-                    current_centers[marker_id]
+                # Get centers for current and neighboring frames
+                curr_center = self._get_marker_centers(curr_row)[marker_id]
+
+                # Get positions from neighboring frames
+                prev_centers = []
+                for j in range(1, neighbor_range + 1):
+                    prev_centers.append(self._get_marker_centers(df.iloc[i - j])[marker_id])
+
+                next_centers = []
+                for j in range(1, neighbor_range + 1):
+                    next_centers.append(self._get_marker_centers(df.iloc[i + j])[marker_id])
+
+                # Calculate average position of neighbors
+                prev_avg_x = sum(center[0] for center in prev_centers) / len(prev_centers)
+                prev_avg_y = sum(center[1] for center in prev_centers) / len(prev_centers)
+                next_avg_x = sum(center[0] for center in next_centers) / len(next_centers)
+                next_avg_y = sum(center[1] for center in next_centers) / len(next_centers)
+
+                neighbor_avg_center = (
+                    (prev_avg_x + next_avg_x) / 2,
+                    (prev_avg_y + next_avg_y) / 2
                 )
 
-                # Angle change
-                angle_change = abs(current_row[f'id{marker_id}_angle'] - initial_angles[marker_id])
+                # Check position deviation from neighbors average
+                position_deviation = self._calculate_distance(curr_center, neighbor_avg_center)
 
-                if position_change > threshold_position:
-                    anomalies.append(f"{frame_index}:{marker_id}[pos:{position_change:.1f}px]")
-                if angle_change > threshold_angle:
-                    anomalies.append(f"{frame_index}:{marker_id}[ang:{angle_change:.1f}°]")
+                # Get angles from neighboring frames
+                curr_angle = curr_row[f'id{marker_id}_angle']
+
+                prev_angles = []
+                for j in range(1, neighbor_range + 1):
+                    prev_angles.append(df.iloc[i - j][f'id{marker_id}_angle'])
+
+                next_angles = []
+                for j in range(1, neighbor_range + 1):
+                    next_angles.append(df.iloc[i + j][f'id{marker_id}_angle'])
+
+                # Handle angle wraparound for each neighbor
+                def normalize_angles(base_angle, angles):
+                    normalized = []
+                    for angle in angles:
+                        if abs(base_angle - angle) > 180:
+                            if angle > 180:
+                                normalized.append(angle - 360)
+                            else:
+                                normalized.append(angle + 360)
+                        else:
+                            normalized.append(angle)
+                    return normalized
+
+                prev_angles = normalize_angles(curr_angle, prev_angles)
+                next_angles = normalize_angles(curr_angle, next_angles)
+
+                # Calculate average angle of neighbors
+                prev_avg_angle = sum(prev_angles) / len(prev_angles)
+                next_avg_angle = sum(next_angles) / len(next_angles)
+                avg_angle = (prev_avg_angle + next_avg_angle) / 2
+
+                # Calculate angle deviation from neighbors average
+                angle_deviation = min(
+                    abs(curr_angle - avg_angle),
+                    abs(curr_angle - avg_angle + 360),
+                    abs(curr_angle - avg_angle - 360)
+                )
+
+                # Report anomalies
+                if position_deviation > threshold_position:
+                    # Calculate average deviations for context
+                    prev_devs = [self._calculate_distance(curr_center, pc) for pc in prev_centers]
+                    next_devs = [self._calculate_distance(curr_center, nc) for nc in next_centers]
+                    avg_prev_dev = sum(prev_devs) / len(prev_devs)
+                    avg_next_dev = sum(next_devs) / len(next_devs)
+
+                    anomalies.append(
+                        f"{frame_index}:{marker_id}[pos:{position_deviation:.1f}px|prev:{avg_prev_dev:.1f}|next:{avg_next_dev:.1f}]"
+                    )
+
+                if angle_deviation > threshold_angle:
+                    # Calculate average angle deviations for context
+                    prev_ang_devs = [min(abs(curr_angle - pa), abs(curr_angle - pa + 360), abs(curr_angle - pa - 360))
+                                     for pa in prev_angles]
+                    next_ang_devs = [min(abs(curr_angle - na), abs(curr_angle - na + 360), abs(curr_angle - na - 360))
+                                     for na in next_angles]
+                    avg_prev_ang_dev = sum(prev_ang_devs) / len(prev_ang_devs)
+                    avg_next_ang_dev = sum(next_ang_devs) / len(next_ang_devs)
+
+                    anomalies.append(
+                        f"{frame_index}:{marker_id}[ang:{angle_deviation:.1f}°|prev:{avg_prev_ang_dev:.1f}|next:{avg_next_ang_dev:.1f}]"
+                    )
 
         if anomalies:
             return f"Stability anomalies detected in frame:marker -> {', '.join(anomalies)}"
         return "No stability anomalies detected"
-
-    def analyze_geometric_consistency(self, shape_tolerance: float = 0.02,
-                                      frame_range: tuple = None) -> str:
-        """
-        Analyze geometric consistency by comparing ratios to the first frame.
-
-        Args:
-            shape_tolerance: Maximum allowed deviation in ratios (2%)
-            frame_range: Optional tuple (start_frame, end_frame) to analyze specific range
-
-        Returns:
-            str: Report with detected geometric anomalies
-        """
-        df = self.data.df
-        if frame_range:
-            start_frame, end_frame = frame_range
-            df = df[(df['frame_index'] >= start_frame) & (df['frame_index'] <= end_frame)]
-
-        df = df.sort_values('frame_index')
-        anomalies = []
-
-        # Get reference ratios from first frame only
-        reference_ratios = self.calculate_aspect_ratio(df.iloc[0]['frame_index'])
-        if not reference_ratios:
-            return "Could not calculate reference aspect ratios"
-
-        # Compare each frame with reference frame
-        for i in range(1, len(df)):  # start from second frame
-            curr_frame = df.iloc[i]['frame_index']
-            curr_ratios = self.calculate_aspect_ratio(curr_frame)
-
-            if not curr_ratios:
-                continue
-
-            # Check changes in all ratio types
-            for ratio_type in ['inner_ratio', 'outer_ratio', 'average_ratio']:
-                change = abs(curr_ratios[ratio_type] - reference_ratios[ratio_type]) / reference_ratios[ratio_type]
-                if change > shape_tolerance:
-                    anomalies.append(f"{curr_frame}[{ratio_type}:{change:.3f}]")
-
-        if anomalies:
-            return f"Geometric anomalies detected -> {', '.join(anomalies)}"
-        return "No geometric anomalies detected"
