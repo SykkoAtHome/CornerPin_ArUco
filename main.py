@@ -61,13 +61,12 @@ def process_all_frames(image_dir: str, expected_markers: int = 4, frame_range: t
 # Example usage:
 if __name__ == "__main__":
     # Directory containing image frames
-    image_directory = "img/aruco4"
+    image_directory = "img/render_mb"
 
     # Process specific range of frames (e.g., frames 100-200)
     result_data = process_all_frames(
         image_dir=image_directory,
-        expected_markers=4,
-        frame_range=(475, 510)  # Optional: process only frames 100-200
+        expected_markers=4
     )
 
     # Run analysis
@@ -80,5 +79,5 @@ if __name__ == "__main__":
 
     # Export results
     exporter = ExportData(result_data)
-    exporter.export_cornerpin("export/aruco4.nk", point_type='outer')
+    exporter.export_cornerpin("export/mb.nk", point_type='outer')
     print(result_data.df.to_string())
