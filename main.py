@@ -1,6 +1,7 @@
 from data import Data
 from data_processor import DataProcessor
 from detector import ArucoDetector
+from draw import Draw, MarkerElements
 from image import Image
 from export_data import ExportData
 
@@ -58,6 +59,18 @@ def process_all_frames(image_dir: str, expected_markers: int = 4, frame_range: t
     return data
 
 
+# Set marker style
+draw = Draw()
+draw.set_marker_elements(MarkerElements(
+    outline=True,
+    corners=True,
+    corner_numbers=True,
+    center=True,
+    id=True,
+    orientation=True,
+    angle=True
+))
+
 # Example usage:
 if __name__ == "__main__":
     # Directory containing image frames
@@ -67,13 +80,16 @@ if __name__ == "__main__":
     result_data = process_all_frames(
         image_dir=image_directory,
         expected_markers=4,
-        frame_range=(0, 50)
+        # frame_range=(20, 25)
     )
 
     # Run analysis
     data_processor = DataProcessor(result_data)
-    stability_report = data_processor.analyze_sequence_stability(threshold_position=4.0, threshold_angle=3.0)
+    stability_report = data_processor.analyze_sequence_stability(threshold_position=2.0, threshold_angle=3.0)
     print(stability_report)
+
+    # Export dataframe as images
+    draw.export_as_image(result_data, "img/marker_visualization")
 
     # Export results
     # exporter = ExportData(result_data)

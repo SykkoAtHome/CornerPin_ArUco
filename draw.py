@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Tuple
-
+import os
 import cv2
 import numpy as np
+import pandas as pd
 
 from visualization_config import VisualizationConfig, TextConfig
 
@@ -27,6 +28,15 @@ class Draw:
         self.visible_markers = [True] * 4
         self.marker_elements = MarkerElements()
 
+    def set_marker_elements(self, elements: MarkerElements) -> None:
+        """
+        Set which elements of markers should be visible.
+
+        Args:
+            elements: MarkerElements dataclass instance with boolean flags
+        """
+        self.marker_elements = elements
+
     def set_marker_visibility(self, marker_ids: List[int]) -> None:
         """
         Set which markers should be visible.
@@ -38,15 +48,6 @@ class Draw:
         for marker_id in marker_ids:
             if 0 <= marker_id < 4:
                 self.visible_markers[marker_id] = True
-
-    def set_marker_elements(self, elements: MarkerElements) -> None:
-        """
-        Set which elements of markers should be visible.
-
-        Args:
-            elements: MarkerElements dataclass instance with boolean flags
-        """
-        self.marker_elements = elements
 
     def _draw_text_with_background(self, img: np.ndarray, text: str,
                                    position: Tuple[int, int],
@@ -189,44 +190,70 @@ class Draw:
         self._draw_text_with_background(img, text, text_pos,
                                         self.config.rect_center_text)
 
-    def draw_markers(self, data, frame_index: int) -> np.ndarray:
+    def export_as_image(self, data, output_dir: str) -> None:
         """
-        Draws selected markers and their elements on transparent background.
+        Export marker detections as transparent PNG images.
 
         Args:
-            data: Data object containing markers information
-            frame_index: Frame number to process
+            data: Data object or DataFrame containing detection data
+            output_dir: Directory where images will be saved
+        """
+        # Convert Data object to DataFrame if needed
+        df = data.df if hasattr(data, 'df') else data
+        df = df.sort_values('frame_index')
+
+        # Create output directory
+        os.makedirs(output_dir, exist_ok=True)
+
+        for _, row in df.iterrows():
+            frame_index = int(row['frame_index'])
+            width = int(row['image_width'])
+            height = int(row['image_height'])
+
+            # Create transparent image (BGRA)
+            img_markers = np.zeros((height, width, 4), dtype=np.uint8)
+
+            # Draw only visible markers
+            for marker_id in range(4):
+                if not self.visible_markers[marker_id]:
+                    continue
+
+                corners = self._get_corners_from_row(row, marker_id)
+                if corners is not None:
+                    angle = row[f'id{marker_id}_angle']
+                    self._draw_marker(img_markers, corners[0], marker_id, angle)
+
+            # Draw relative center if available
+            center_x = row['center_x']
+            center_y = row['center_y']
+
+            if not (np.isnan(center_x) or np.isnan(center_y)):
+                self.draw_relative_center(img_markers, center_x, center_y)
+
+            # Save image
+            filename = f"detection_{frame_index:04d}.png"
+            output_path = os.path.join(output_dir, filename)
+            cv2.imwrite(output_path, img_markers)
+
+    def _get_corners_from_row(self, row: pd.Series, marker_id: int) -> np.ndarray:
+        """
+        Extract marker corners from DataFrame row.
+
+        Args:
+            row: DataFrame row containing detection data
+            marker_id: ID of the marker
 
         Returns:
-            BGRA image with drawn markers on transparent background
+            numpy array in (1,4,2) format or None if corners not found
         """
-        # Get image dimensions from DataFrame
-        frame_data = data.df[data.df['frame_index'] == frame_index]
-        if frame_data.empty:
-            return None
+        corners = np.zeros((4, 2))
+        for i in range(4):
+            x = row[f'id{marker_id}_corner{i}_x']
+            y = row[f'id{marker_id}_corner{i}_y']
+            if np.isnan(x) or np.isnan(y):
+                return None
+            corners[i, 0] = x
+            corners[i, 1] = y
 
-        width = int(frame_data.iloc[0]['image_width'])
-        height = int(frame_data.iloc[0]['image_height'])
-
-        # Create transparent image (BGRA)
-        img_markers = np.zeros((height, width, 4), dtype=np.uint8)
-
-        # Draw only visible markers
-        for marker_id in range(4):  # Assuming always 4 markers
-            if not self.visible_markers[marker_id]:
-                continue
-
-            corners = data.get_marker_corners(frame_index, marker_id)
-            if corners is not None:
-                # Get angle from DataFrame
-                angle = frame_data.iloc[0][f'id{marker_id}_angle']
-                self._draw_marker(img_markers, corners[0], marker_id, angle)
-
-        # Draw relative center if available
-        center_x = frame_data.iloc[0]['center_x']
-        center_y = frame_data.iloc[0]['center_y']
-
-        if not (np.isnan(center_x) or np.isnan(center_y)):
-            self.draw_relative_center(img_markers, center_x, center_y)
-
-        return img_markers
+        # Transform to (1,4,2) format required by OpenCV
+        return corners.reshape(1, 4, 2)

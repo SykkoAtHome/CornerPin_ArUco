@@ -173,9 +173,9 @@ class DataProcessor:
             'inner_height': inner_dims['height']
         }
 
-    def analyze_sequence_stability(self, threshold_position: float = 1.0,
-                                   threshold_angle: float = 2.0,
-                                   neighbor_range: int = 2) -> str:
+    def analyze_sequence_stability(self, threshold_position: float = 5.0,
+                                   threshold_angle: float = 3.0,
+                                   neighbor_range: int = 1) -> str:
         """
         Analyze stability of markers detection by comparing with neighboring frames.
         Anomaly is detected when value significantly differs from average of neighboring frames.
